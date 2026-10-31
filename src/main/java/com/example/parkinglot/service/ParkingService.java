@@ -14,6 +14,7 @@ import com.example.parkinglot.model.VehicleType;
 import com.example.parkinglot.repository.ParkingSpotRepository;
 import com.example.parkinglot.repository.TicketRepository;
 import org.springframework.dao.ConcurrencyFailureException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -99,14 +100,15 @@ public class ParkingService {
     }
 
     /**
-     * Concurrent requests that lose a race (optimistic version clash or lock timeout) are retried
-     * in a fresh transaction, where they see the up-to-date state.
+     * Concurrent requests that lose a race (optimistic version clash, lock timeout, or a second
+     * active ticket for the same vehicle) are retried in a fresh transaction, where they see the
+     * up-to-date state.
      */
     private <T> T withRetry(Supplier<T> action) {
         for (int attempt = 1; ; attempt++) {
             try {
                 return action.get();
-            } catch (ConcurrencyFailureException e) {
+            } catch (ConcurrencyFailureException | DataIntegrityViolationException e) {
                 if (attempt >= MAX_ATTEMPTS) {
                     throw e;
                 }

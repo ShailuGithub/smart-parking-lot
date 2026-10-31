@@ -50,12 +50,14 @@ parking_spot  (id PK, floor_id FK, spot_number, spot_type, occupied, version)
       |
       N
 ticket        (id PK, vehicle_number, vehicle_type, spot_id FK,
-               entry_time, exit_time, fee, status)
-              INDEX (vehicle_number, status)
+               entry_time, exit_time, fee, status, active_vehicle)
+              INDEX (vehicle_number, status)   UNIQUE (active_vehicle)
 ```
 
 A vehicle is not stored as its own table: only its plate number and type matter for a parking
 session, so they live on the ticket. A ticket is `ACTIVE` until check-out, then `CLOSED`.
+`active_vehicle` holds the plate while the ticket is active and is null once closed; its unique
+constraint guarantees a vehicle can never hold two active tickets, even under concurrent check-ins.
 
 ## Spot allocation
 
@@ -90,7 +92,8 @@ pricing rule can be added by providing another `FeeCalculator`.
 - `ParkingSpot` also carries a `@Version` column as an optimistic safety net, which also protects
   against two simultaneous check-outs of the same vehicle.
 - Each check-in / check-out runs in its own transaction; a request that loses a race
-  (`ConcurrencyFailureException`) is retried up to 3 times in a fresh transaction.
+  (`ConcurrencyFailureException`, or a unique-constraint clash on `active_vehicle`) is retried up to
+  3 times in a fresh transaction. If it still loses, the client gets `409`, not a server error.
 - `ParkingServiceTest#concurrentCheckInsNeverShareASpot` fires 20 buses at 6 large spots at once and
   asserts exactly 6 succeed with distinct spots and the other 14 get `409`.
 

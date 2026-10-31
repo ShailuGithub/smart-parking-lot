@@ -129,6 +129,36 @@ class ParkingServiceTest {
         assertThat(rejected).isEqualTo(attempts - largeSpots);
     }
 
+    @Test
+    void sameVehicleCheckingInConcurrentlyGetsOnlyOneTicket() throws Exception {
+        int attempts = 10;
+        ExecutorService pool = Executors.newFixedThreadPool(attempts);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<TicketResponse>> futures = new ArrayList<>();
+        for (int i = 0; i < attempts; i++) {
+            Callable<TicketResponse> task = () -> {
+                start.await();
+                return service.checkIn(new CheckInRequest("SAME-1", VehicleType.CAR));
+            };
+            futures.add(pool.submit(task));
+        }
+        start.countDown();
+
+        int parked = 0;
+        for (Future<TicketResponse> future : futures) {
+            try {
+                future.get();
+                parked++;
+            } catch (java.util.concurrent.ExecutionException e) {
+                assertThat(e.getCause()).isInstanceOf(VehicleAlreadyParkedException.class);
+            }
+        }
+        pool.shutdown();
+
+        assertThat(parked).isEqualTo(1);
+        assertThat(freeSpots(SpotType.MEDIUM)).isEqualTo(17);
+    }
+
     private long freeSpots(SpotType type) {
         return service.availability().stream()
                 .filter(a -> a.spotType() == type)

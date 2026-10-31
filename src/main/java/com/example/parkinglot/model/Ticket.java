@@ -12,13 +12,15 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "ticket",
-        indexes = @Index(name = "idx_ticket_vehicle_status", columnList = "vehicle_number, status"))
+        indexes = @Index(name = "idx_ticket_vehicle_status", columnList = "vehicle_number, status"),
+        uniqueConstraints = @UniqueConstraint(name = "uk_ticket_active_vehicle", columnNames = "active_vehicle"))
 public class Ticket {
 
     @Id
@@ -49,6 +51,10 @@ public class Ticket {
     @Column(nullable = false)
     private TicketStatus status;
 
+    /** Plate number while the ticket is ACTIVE, null once closed; the unique constraint on it stops a vehicle holding two active tickets. */
+    @Column(name = "active_vehicle", length = 20)
+    private String activeVehicle;
+
     protected Ticket() {
     }
 
@@ -58,12 +64,14 @@ public class Ticket {
         this.spot = spot;
         this.entryTime = entryTime;
         this.status = TicketStatus.ACTIVE;
+        this.activeVehicle = vehicleNumber;
     }
 
     public void close(LocalDateTime exitTime, BigDecimal fee) {
         this.exitTime = exitTime;
         this.fee = fee;
         this.status = TicketStatus.CLOSED;
+        this.activeVehicle = null;
     }
 
     public Long getId() {
